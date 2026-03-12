@@ -38,8 +38,20 @@ export default async function AuditPage({ params }: { params: Promise<{ id: stri
       </nav>
 
       <div className="max-w-3xl mx-auto px-8 py-12">
+        {/* Failed */}
+        {audit.status === 'failed' && (
+          <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
+            <div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-5">
+              <span className="text-red-500 text-lg font-semibold">!</span>
+            </div>
+            <h2 className="font-semibold text-lg mb-2">{locale === 'en' ? 'Audit failed' : 'Audit mislukt'}</h2>
+            <p className="text-gray-500 text-sm mb-6">{locale === 'en' ? 'Something went wrong while processing this audit. Please try again with a new audit.' : 'Er ging iets mis bij het verwerken van deze audit. Probeer het opnieuw met een nieuwe audit.'}</p>
+            <a href="/dashboard/new-audit" className="bg-black text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800">{locale === 'en' ? 'Start new audit' : 'Nieuwe audit starten'}</a>
+          </div>
+        )}
+
         {/* Status */}
-        {audit.status !== 'completed' && (
+        {(audit.status === 'queued' || audit.status === 'processing') && (
           <AuditStatus auditId={audit.id} brandName={audit.brand_name} createdAt={audit.created_at} locale={locale} />
         )}
 
@@ -71,7 +83,7 @@ export default async function AuditPage({ params }: { params: Promise<{ id: stri
             <div className="bg-white rounded-xl border border-gray-200 p-8 mb-4">
               <h2 className="font-semibold mb-4">Key findings</h2>
               <ul className="space-y-3">
-                {(audit.report?.key_findings?.slice(0, 3) ?? [t.reportNoFindings]).map((f: string, i: number) => (
+                {(audit.report?.key_findings?.slice(0, isPro ? 5 : 3) ?? [t.reportNoFindings]).map((f: string, i: number) => (
                   <li key={i} className="flex gap-3 text-sm">
                     <span className="text-gray-300 shrink-0">{i + 1}.</span>
                     <span className="text-gray-700">{f}</span>

@@ -44,7 +44,7 @@ export default async function Home() {
           <Link href="/auth/signup" className="bg-black text-white px-6 py-3 rounded-lg hover:bg-gray-800 font-medium">
             {t.heroCta}
           </Link>
-          <Link href="#hoe-het-werkt" className="text-gray-600 px-6 py-3 hover:text-black font-medium">
+          <Link href="#how-it-works" className="text-gray-600 px-6 py-3 hover:text-black font-medium">
             {t.heroHow}
           </Link>
         </div>
@@ -69,7 +69,7 @@ export default async function Home() {
       </section>
 
       {/* How it works */}
-      <section id="hoe-het-werkt" className="max-w-4xl mx-auto px-8 py-24">
+      <section id="how-it-works" className="max-w-4xl mx-auto px-8 py-24">
         <h2 className="text-3xl font-semibold mb-16 tracking-tight">{t.howTitle}</h2>
         <div className="grid grid-cols-3 gap-12">
           <div>
@@ -90,8 +90,81 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* Example report */}
+      <section className="bg-gray-50 px-8 py-24">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl font-semibold mb-3 tracking-tight">{t.exampleTitle}</h2>
+          <p className="text-gray-500 mb-12">{t.exampleSub}</p>
+
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {/* Header */}
+            <div className="px-8 pt-8 pb-6 border-b border-gray-100">
+              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">{t.exampleBrand}</p>
+            </div>
+
+            {/* Visibility score */}
+            <div className="px-8 py-6 border-b border-gray-100">
+              <h3 className="text-sm font-semibold mb-3">{t.exampleVisLabel}</h3>
+              <div className="flex items-end gap-3 mb-3">
+                <span className="text-5xl font-semibold">64</span>
+                <span className="text-gray-400 text-lg mb-1">/100</span>
+              </div>
+              <p className="text-gray-500 text-sm">{t.exampleVisSummary}</p>
+            </div>
+
+            {/* Key findings */}
+            <div className="px-8 py-6 border-b border-gray-100">
+              <h3 className="text-sm font-semibold mb-3">Key findings</h3>
+              <ul className="space-y-2.5">
+                {[t.exampleFinding1, t.exampleFinding2, t.exampleFinding3].map((f, i) => (
+                  <li key={i} className="flex gap-3 text-sm">
+                    <span className="text-gray-300 shrink-0">{i + 1}.</span>
+                    <span className="text-gray-600">{f}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Pro sections (blurred) */}
+            <div className="px-8 py-6 relative">
+              <div className="absolute inset-0 backdrop-blur-[2px] bg-white/60 z-10 flex flex-col items-center justify-center">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">{t.exampleProLabel}</p>
+                <Link href="/auth/signup" className="bg-black text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800">
+                  {t.heroCta}
+                </Link>
+              </div>
+              <div className="space-y-5 opacity-40">
+                <div>
+                  <p className="text-sm font-semibold mb-1">{t.exampleGapLabel}</p>
+                  <p className="text-xs text-gray-500">{t.exampleGapDesc}</p>
+                  <div className="mt-2 space-y-2">
+                    {['Tone of Voice', 'Core Values', 'Audience', 'Market Position'].map((d, i) => (
+                      <div key={d} className="flex items-center gap-3">
+                        <span className="text-xs text-gray-500 w-28 shrink-0">{d}</span>
+                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full">
+                          <div className="h-1.5 bg-black rounded-full" style={{ width: `${[45, 60, 70, 35][i]}%` }} />
+                        </div>
+                        <span className="text-xs text-gray-400 w-8 text-right">{[4.5, 6, 7, 3.5][i]}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold mb-1">{t.exampleCompLabel}</p>
+                  <p className="text-xs text-gray-500">{t.exampleCompDesc}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold mb-1">{t.exampleActionsLabel}</p>
+                  <p className="text-xs text-gray-500">{t.exampleActionsDesc}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Pricing */}
-      <section id="pricing" className="bg-gray-50 px-8 py-24">
+      <section id="pricing" className="px-8 py-24">
         <div className="max-w-4xl mx-auto">
           <h2 className="text-3xl font-semibold mb-4 tracking-tight">{t.pricingTitle}</h2>
           <p className="text-gray-500 mb-6">{t.pricingSub}</p>
