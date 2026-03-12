@@ -1,5 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
-import { PLANS, type PlanId } from '@/lib/stripe'
+import { PLANS, type PlanId } from '@/lib/plans'
+import { getLocale } from '@/lib/locale'
+import { translations } from '@/lib/translations'
+import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
@@ -9,34 +12,31 @@ export default async function DashboardPage() {
 
   if (!user) redirect('/auth/login')
 
-  const { data: audits } = await supabase
-    .from('audits')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
+  const [{ data: audits }, { data: profile }, locale] = await Promise.all([
+    supabase.from('audits').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+    supabase.from('profiles').select('credits, plan').eq('id', user.id).single(),
+    getLocale(),
+  ])
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('credits, plan')
-    .eq('id', user.id)
-    .single()
-
+  const t = translations[locale]
   const credits = profile?.credits ?? 0
   const planId = (profile?.plan ?? 'free') as PlanId
   const plan = PLANS[planId]
   const isFree = planId === 'free'
+
+  function statusLabel(status: string) {
+    if (status === 'completed') return t.statusCompleted
+    if (status === 'processing') return t.statusProcessing
+    return t.statusQueued
+  }
 
   return (
     <main className="min-h-screen bg-gray-50">
       <nav className="bg-white border-b border-gray-100 px-8 py-4 flex justify-between items-center">
         <span className="text-lg font-semibold tracking-tight">Mirr</span>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-400">
-            {credits} audit{credits !== 1 ? 's' : ''} resterend
-          </span>
-          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-            isFree ? 'bg-gray-100 text-gray-500' : 'bg-black text-white'
-          }`}>
+          <span className="text-sm text-gray-400">{t.dashAuditsRemaining(credits)}</span>
+          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${isFree ? 'bg-gray-100 text-gray-500' : 'bg-black text-white'}`}>
             {plan.name}
           </span>
           {isFree && (
@@ -44,55 +44,50 @@ export default async function DashboardPage() {
               Upgrade
             </Link>
           )}
+          <LanguageSwitcher current={locale} />
         </div>
       </nav>
 
       <div className="max-w-4xl mx-auto px-8 py-12">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-2xl font-semibold">Jouw audits</h1>
-            <p className="text-gray-500 text-sm mt-1">{audits?.length ?? 0} audit{(audits?.length ?? 0) !== 1 ? 's' : ''}</p>
+            <h1 className="text-2xl font-semibold">{t.dashTitle}</h1>
+            <p className="text-gray-500 text-sm mt-1">{t.dashCount(audits?.length ?? 0)}</p>
           </div>
           {credits > 0 ? (
             <Link href="/dashboard/new-audit" className="bg-black text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800">
-              Nieuwe audit
+              {t.dashNewAudit}
             </Link>
           ) : (
             <Link href="/dashboard/upgrade" className="bg-black text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800">
-              {isFree ? 'Upgrade voor meer audits' : 'Audits ophalen'}
+              {isFree ? t.dashUpgradeMore : t.dashGetAudits}
             </Link>
           )}
         </div>
 
-        {/* Free plan teaser */}
         {isFree && credits === 0 && (audits?.length ?? 0) > 0 && (
           <div className="bg-black text-white rounded-xl p-6 mb-6 flex justify-between items-center">
             <div>
-              <p className="font-semibold mb-1">Je gratis audit is gebruikt</p>
-              <p className="text-gray-400 text-sm">Upgrade naar Pro voor 3 volledige audits per maand en toegang tot de identity gap analyse.</p>
+              <p className="font-semibold mb-1">{t.dashFreeUsedTitle}</p>
+              <p className="text-gray-400 text-sm">{t.dashFreeUsedBody}</p>
             </div>
             <Link href="/dashboard/upgrade" className="bg-white text-black px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 shrink-0 ml-6">
-              Upgrade naar Pro
+              {t.dashUpgradePro}
             </Link>
           </div>
         )}
 
         {!audits || audits.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
-            <h2 className="font-semibold mb-2">Nog geen audits</h2>
-            <p className="text-gray-500 text-sm mb-6">Start je eerste Mirr audit en zie hoe AI jouw merk ziet.</p>
+            <h2 className="font-semibold mb-2">{t.dashEmptyTitle}</h2>
+            <p className="text-gray-500 text-sm mb-6">{t.dashEmptyBody}</p>
             <Link href="/dashboard/new-audit" className="bg-black text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800">
-              Gratis audit starten
+              {t.dashEmptyCta}
             </Link>
           </div>
         ) : (
           <div className="space-y-3">
-            {audits.map((audit: {
-              id: string
-              brand_name: string
-              status: string
-              created_at: string
-            }) => (
+            {audits.map((audit: { id: string; brand_name: string; status: string; created_at: string }) => (
               <Link
                 key={audit.id}
                 href={`/dashboard/audits/${audit.id}`}
@@ -102,7 +97,7 @@ export default async function DashboardPage() {
                   <div>
                     <h3 className="font-semibold">{audit.brand_name}</h3>
                     <p className="text-gray-400 text-sm mt-0.5">
-                      {new Date(audit.created_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      {new Date(audit.created_at).toLocaleDateString(locale === 'nl' ? 'nl-NL' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
                   </div>
                   <span className={`text-xs px-3 py-1 rounded-full font-medium ${
@@ -110,8 +105,7 @@ export default async function DashboardPage() {
                     audit.status === 'processing' ? 'bg-blue-50 text-blue-700' :
                     'bg-gray-100 text-gray-600'
                   }`}>
-                    {audit.status === 'completed' ? 'Klaar' :
-                     audit.status === 'processing' ? 'Bezig' : 'In wachtrij'}
+                    {statusLabel(audit.status)}
                   </span>
                 </div>
               </Link>

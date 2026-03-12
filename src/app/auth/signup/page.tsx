@@ -2,7 +2,11 @@
 
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { getClientLocale } from '@/lib/locale-client'
+import { translations } from '@/lib/translations'
+import { LanguageSwitcher } from '@/components/LanguageSwitcher'
+import type { Locale } from '@/lib/translations'
 
 export default function SignupPage() {
   const [email, setEmail] = useState('')
@@ -11,7 +15,14 @@ export default function SignupPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
+  const [locale, setLocale] = useState<Locale>('nl')
   const supabase = createClient()
+
+  useEffect(() => {
+    setLocale(getClientLocale())
+  }, [])
+
+  const t = translations[locale]
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
@@ -37,8 +48,8 @@ export default function SignupPage() {
       <main className="min-h-screen bg-white flex items-center justify-center">
         <div className="w-full max-w-sm px-8 text-center">
           <span className="text-xl font-semibold tracking-tight block mb-12">Mirr</span>
-          <h1 className="text-2xl font-semibold mb-4">Check je inbox</h1>
-          <p className="text-gray-500 text-sm">We hebben een bevestigingslink gestuurd naar {email}. Klik op de link om je account te activeren.</p>
+          <h1 className="text-2xl font-semibold mb-4">{t.signupDoneTitle}</h1>
+          <p className="text-gray-500 text-sm">{t.signupDoneBody(email)}</p>
         </div>
       </main>
     )
@@ -47,13 +58,18 @@ export default function SignupPage() {
   return (
     <main className="min-h-screen bg-white flex items-center justify-center">
       <div className="w-full max-w-sm px-8">
-        <Link href="/" className="text-xl font-semibold tracking-tight block mb-12">Mirr</Link>
-        <h1 className="text-2xl font-semibold mb-2">Account aanmaken</h1>
-        <p className="text-gray-500 text-sm mb-8">Al een account? <Link href="/auth/login" className="text-black underline">Log in</Link></p>
+        <div className="flex justify-between items-center mb-12">
+          <Link href="/" className="text-xl font-semibold tracking-tight">Mirr</Link>
+          <LanguageSwitcher current={locale} />
+        </div>
+        <h1 className="text-2xl font-semibold mb-2">{t.signupTitle}</h1>
+        <p className="text-gray-500 text-sm mb-8">
+          {t.signupHasAccount} <Link href="/auth/login" className="text-black underline">{t.signupHasAccountLink}</Link>
+        </p>
 
         <form onSubmit={handleSignup} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1.5">Bedrijfsnaam</label>
+            <label className="block text-sm font-medium mb-1.5">{t.signupCompanyLabel}</label>
             <input
               type="text"
               value={company}
@@ -63,7 +79,7 @@ export default function SignupPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1.5">E-mailadres</label>
+            <label className="block text-sm font-medium mb-1.5">{t.signupEmailLabel}</label>
             <input
               type="email"
               value={email}
@@ -73,7 +89,7 @@ export default function SignupPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1.5">Wachtwoord</label>
+            <label className="block text-sm font-medium mb-1.5">{t.signupPasswordLabel}</label>
             <input
               type="password"
               value={password}
@@ -91,7 +107,7 @@ export default function SignupPage() {
             disabled={loading}
             className="w-full bg-black text-white py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
           >
-            {loading ? 'Bezig...' : 'Account aanmaken'}
+            {loading ? t.signupLoading : t.signupSubmit}
           </button>
         </form>
       </div>

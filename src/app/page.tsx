@@ -1,35 +1,51 @@
 import Link from 'next/link'
+import { getLocale } from '@/lib/locale'
+import { translations } from '@/lib/translations'
+import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 
-export default function Home() {
+export default async function Home() {
+  const locale = await getLocale()
+  const t = translations[locale]
+
+  const packages = [
+    { name: '1 credit', price: '€39', per: '€39 per audit', desc: t.pkg1Desc },
+    { name: '5 credits', price: '€169', per: '€33,80 per audit', desc: t.pkg5Desc, highlight: true },
+    { name: '10 credits', price: '€279', per: '€27,90 per audit', desc: t.pkg10Desc },
+  ]
+
+  const plans = [
+    { name: 'Pro', price: '€79/mo', per: '€26 per audit', credits: t.planProDesc, features: t.planProFeatures, highlight: true },
+    { name: 'Agency', price: '€199/mo', per: '€20 per audit', credits: t.planAgencyDesc, features: t.planAgencyFeatures, highlight: false },
+  ]
+
   return (
     <main className="min-h-screen bg-white">
       {/* Nav */}
       <nav className="px-8 py-6 flex justify-between items-center border-b border-gray-100">
         <span className="text-xl font-semibold tracking-tight">Mirr</span>
         <div className="flex gap-6 items-center">
-          <Link href="/auth/login" className="text-sm text-gray-600 hover:text-black">Inloggen</Link>
+          <LanguageSwitcher current={locale} />
+          <Link href="/about" className="text-sm text-gray-600 hover:text-black">{t.about}</Link>
+          <Link href="/auth/login" className="text-sm text-gray-600 hover:text-black">{t.login}</Link>
           <Link href="/auth/signup" className="text-sm bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800">
-            Start een audit
+            {t.signup}
           </Link>
         </div>
       </nav>
 
       {/* Hero */}
       <section className="max-w-4xl mx-auto px-8 pt-24 pb-20">
-        <p className="text-sm text-gray-400 mb-6 uppercase tracking-widest">Brand Perception Audit</p>
-        <h1 className="text-5xl font-semibold leading-tight mb-6 tracking-tight">
-          We meten niet alleen of AI<br />je kent. We meten of AI<br />je begrijpt.
+        <p className="text-sm text-gray-400 mb-6 uppercase tracking-widest">{t.heroTag}</p>
+        <h1 className="text-5xl font-semibold leading-tight mb-6 tracking-tight whitespace-pre-line">
+          {t.heroHeadline}
         </h1>
-        <p className="text-xl text-gray-500 mb-10 max-w-2xl">
-          ChatGPT, Perplexity, Claude en Gemini vormen een beeld van jouw merk.
-          Weet jij wat dat beeld is — en klopt het met wie je bent?
-        </p>
+        <p className="text-xl text-gray-500 mb-10 max-w-2xl">{t.heroSub}</p>
         <div className="flex gap-4">
           <Link href="/auth/signup" className="bg-black text-white px-6 py-3 rounded-lg hover:bg-gray-800 font-medium">
-            Start een audit
+            {t.heroCta}
           </Link>
           <Link href="#hoe-het-werkt" className="text-gray-600 px-6 py-3 hover:text-black font-medium">
-            Hoe het werkt
+            {t.heroHow}
           </Link>
         </div>
       </section>
@@ -38,72 +54,103 @@ export default function Home() {
       <section className="bg-gray-50 px-8 py-16">
         <div className="max-w-4xl mx-auto grid grid-cols-3 gap-12">
           <div>
-            <p className="text-4xl font-semibold mb-2">92%</p>
-            <p className="text-gray-500 text-sm">van merken scoort slecht op AI-zichtbaarheid</p>
+            <p className="text-4xl font-semibold mb-2">{t.stat1Value}</p>
+            <p className="text-gray-500 text-sm">{t.stat1Label}</p>
           </div>
           <div>
-            <p className="text-4xl font-semibold mb-2">4</p>
-            <p className="text-gray-500 text-sm">AI-platforms getest: ChatGPT, Perplexity, Claude, Gemini</p>
+            <p className="text-4xl font-semibold mb-2">{t.stat2Value}</p>
+            <p className="text-gray-500 text-sm">{t.stat2Label}</p>
           </div>
           <div>
-            <p className="text-4xl font-semibold mb-2">2 wk</p>
-            <p className="text-gray-500 text-sm">van briefing tot volledig rapport</p>
+            <p className="text-4xl font-semibold mb-2">{t.stat3Value}</p>
+            <p className="text-gray-500 text-sm">{t.stat3Label}</p>
           </div>
         </div>
       </section>
 
-      {/* Hoe het werkt */}
+      {/* How it works */}
       <section id="hoe-het-werkt" className="max-w-4xl mx-auto px-8 py-24">
-        <h2 className="text-3xl font-semibold mb-16 tracking-tight">Hoe het werkt</h2>
+        <h2 className="text-3xl font-semibold mb-16 tracking-tight">{t.howTitle}</h2>
         <div className="grid grid-cols-3 gap-12">
           <div>
             <p className="text-sm text-gray-300 mb-3 font-medium">01</p>
-            <h3 className="font-semibold mb-2">Visibility</h3>
-            <p className="text-gray-500 text-sm leading-relaxed">We testen jouw merk op 50+ prompts over vier AI-platforms en meten hoe vaak, waar en hoe je gevonden wordt.</p>
+            <h3 className="font-semibold mb-2">{t.how1Title}</h3>
+            <p className="text-gray-500 text-sm leading-relaxed">{t.how1Body}</p>
           </div>
           <div>
             <p className="text-sm text-gray-300 mb-3 font-medium">02</p>
-            <h3 className="font-semibold mb-2">Identity Gap</h3>
-            <p className="text-gray-500 text-sm leading-relaxed">We vergelijken wat AI zegt met wie jij wil zijn. Welke waarden komen door? Welke niet? Wat draag je onbedoeld mee?</p>
+            <h3 className="font-semibold mb-2">{t.how2Title}</h3>
+            <p className="text-gray-500 text-sm leading-relaxed">{t.how2Body}</p>
           </div>
           <div>
             <p className="text-sm text-gray-300 mb-3 font-medium">03</p>
-            <h3 className="font-semibold mb-2">Cultural Signals</h3>
-            <p className="text-gray-500 text-sm leading-relaxed">We brengen in kaart welke bronnen de AI-perceptie van jouw merk vormen en welke culturele verhalen eraan kleven.</p>
+            <h3 className="font-semibold mb-2">{t.how3Title}</h3>
+            <p className="text-gray-500 text-sm leading-relaxed">{t.how3Body}</p>
           </div>
         </div>
       </section>
 
       {/* Pricing */}
-      <section className="bg-gray-50 px-8 py-24">
+      <section id="pricing" className="bg-gray-50 px-8 py-24">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-semibold mb-4 tracking-tight">Credits</h2>
-          <p className="text-gray-500 mb-16">Koop credits, gebruik ze wanneer je wil. Geen abonnement, geen verrassingen.</p>
-          <div className="grid grid-cols-3 gap-6">
-            <div className="bg-white rounded-xl p-8 border border-gray-200">
-              <h3 className="font-semibold mb-1">Starter</h3>
-              <p className="text-3xl font-semibold mb-1">€4.500</p>
-              <p className="text-gray-400 text-sm mb-6">1 credit — 1 Snapshot</p>
-              <Link href="/auth/signup" className="block text-center bg-black text-white px-4 py-2.5 rounded-lg hover:bg-gray-800 text-sm font-medium">
-                Kopen
-              </Link>
+          <h2 className="text-3xl font-semibold mb-4 tracking-tight">{t.pricingTitle}</h2>
+          <p className="text-gray-500 mb-6">{t.pricingSub}</p>
+
+          {/* Free tier */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 mb-10 flex justify-between items-center">
+            <div>
+              <p className="font-semibold mb-0.5">{t.pricingFreeTitle}</p>
+              <p className="text-gray-500 text-sm">{t.pricingFreeSub}</p>
             </div>
-            <div className="bg-black rounded-xl p-8 text-white">
-              <h3 className="font-semibold mb-1">Growth</h3>
-              <p className="text-3xl font-semibold mb-1">€12.000</p>
-              <p className="text-gray-400 text-sm mb-6">3 credits — 10% korting</p>
-              <Link href="/auth/signup" className="block text-center bg-white text-black px-4 py-2.5 rounded-lg hover:bg-gray-100 text-sm font-medium">
-                Kopen
-              </Link>
-            </div>
-            <div className="bg-white rounded-xl p-8 border border-gray-200">
-              <h3 className="font-semibold mb-1">Pro</h3>
-              <p className="text-3xl font-semibold mb-1">€22.500</p>
-              <p className="text-gray-400 text-sm mb-6">6 credits — 17% korting</p>
-              <Link href="/auth/signup" className="block text-center bg-black text-white px-4 py-2.5 rounded-lg hover:bg-gray-800 text-sm font-medium">
-                Kopen
-              </Link>
-            </div>
+            <Link href="/auth/signup" className="bg-black text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800 shrink-0 ml-8">
+              {t.pricingFreeCta}
+            </Link>
+          </div>
+
+          {/* Credits */}
+          <h3 className="text-base font-semibold mb-1">{t.pricingCreditsTitle}</h3>
+          <p className="text-gray-400 text-sm mb-5">{t.pricingCreditsSub}</p>
+          <div className="grid grid-cols-3 gap-4 mb-12">
+            {packages.map(pkg => (
+              <div key={pkg.name} className={`rounded-xl p-6 border ${pkg.highlight ? 'bg-black text-white border-black' : 'bg-white border-gray-200'}`}>
+                <p className="font-semibold mb-1">{pkg.name}</p>
+                <p className="text-2xl font-semibold mb-0.5">{pkg.price}</p>
+                <p className="text-xs mb-1 text-gray-400">{pkg.per}</p>
+                <p className="text-sm mb-5 text-gray-400">{pkg.desc}</p>
+                <Link href="/auth/signup" className={`block text-center py-2 rounded-lg text-sm font-medium ${pkg.highlight ? 'bg-white text-black hover:bg-gray-100' : 'bg-black text-white hover:bg-gray-800'}`}>
+                  {t.pricingCreditsBuy}
+                </Link>
+              </div>
+            ))}
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-4 mb-12">
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-xs text-gray-400 uppercase tracking-wider">{t.pricingOr}</span>
+            <div className="flex-1 h-px bg-gray-200" />
+          </div>
+
+          {/* Subscriptions */}
+          <h3 className="text-base font-semibold mb-1">{t.pricingSubTitle}</h3>
+          <p className="text-gray-400 text-sm mb-5">{t.pricingSubSub}</p>
+          <div className="grid grid-cols-2 gap-4">
+            {plans.map(plan => (
+              <div key={plan.name} className={`rounded-xl p-6 border ${plan.highlight ? 'bg-black text-white border-black' : 'bg-white border-gray-200'}`}>
+                <p className="font-semibold mb-1">{plan.name}</p>
+                <p className="text-2xl font-semibold mb-0.5">{plan.price}</p>
+                <p className="text-xs mb-1 text-gray-400">{plan.per}</p>
+                <p className="text-sm mb-5 font-medium text-gray-400">{plan.credits}</p>
+                <ul className={`space-y-1.5 mb-6 ${plan.highlight ? 'text-gray-300' : 'text-gray-500'}`}>
+                  {plan.features.map((f: string) => (
+                    <li key={f} className="text-xs flex gap-1.5"><span>·</span>{f}</li>
+                  ))}
+                </ul>
+                <Link href="/auth/signup" className={`block text-center py-2 rounded-lg text-sm font-medium ${plan.highlight ? 'bg-white text-black hover:bg-gray-100' : 'bg-black text-white hover:bg-gray-800'}`}>
+                  {t.pricingSubCta}
+                </Link>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -112,7 +159,7 @@ export default function Home() {
       <footer className="px-8 py-12 border-t border-gray-100">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <span className="font-semibold">Mirr</span>
-          <p className="text-sm text-gray-400">by Meinte Stinstra</p>
+          <a href="https://jackandai.com" target="_blank" rel="noopener noreferrer" className="text-sm text-gray-400 hover:text-gray-700">{t.footerBy}</a>
         </div>
       </footer>
     </main>
