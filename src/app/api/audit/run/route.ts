@@ -28,7 +28,7 @@ async function queryPerplexity(prompt: string): Promise<string> {
 
 async function askClaude(prompt: string, maxTokens = 2000): Promise<string> {
   const msg = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5-20250514',
+    model: 'claude-sonnet-4-20250514',
     max_tokens: maxTokens,
     messages: [{ role: 'user', content: prompt }],
   })
