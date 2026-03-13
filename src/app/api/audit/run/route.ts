@@ -26,9 +26,9 @@ async function queryPerplexity(prompt: string): Promise<string> {
   return data.choices?.[0]?.message?.content ?? ''
 }
 
-async function askClaude(prompt: string, maxTokens = 2000): Promise<string> {
+async function askClaude(prompt: string, maxTokens = 2000, fast = false): Promise<string> {
   const msg = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: fast ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-20250514',
     max_tokens: maxTokens,
     messages: [{ role: 'user', content: prompt }],
   })
@@ -43,6 +43,8 @@ function parseJSON(raw: string): Record<string, unknown> | null {
     return null
   }
 }
+
+export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
   const { auditId, language = 'nl' } = await req.json()
@@ -66,9 +68,9 @@ export async function POST(req: NextRequest) {
     const { brand_name, category, positioning, competitors } = audit
 
     // ========================================
-    // STAP 1: 15 Perplexity prompts over 5 categorieen
+    // STAP 1: ALL Perplexity prompts in parallel (brand + competitor)
     // ========================================
-    const promptCategories = {
+    const brandPrompts = {
       awareness: [
         `What do you know about the brand ${brand_name}? Describe it in detail: what they do, their history, their market position.`,
         `Is ${brand_name} a well-known brand in the ${category} market? How would you rank its brand awareness compared to competitors?`,
@@ -96,21 +98,39 @@ export async function POST(req: NextRequest) {
       ],
     }
 
-    const allResults: { category: string; prompt: string; response: string }[] = []
+    const promptEntries = Object.entries(brandPrompts).flatMap(([cat, prompts]) =>
+      prompts.map(prompt => ({ category: cat, prompt }))
+    )
 
-    for (const [cat, prompts] of Object.entries(promptCategories)) {
-      for (const prompt of prompts) {
-        const response = await queryPerplexity(prompt)
-        allResults.push({ category: cat, prompt, response })
-      }
-    }
+    // Fire brand prompts + competitor prompts ALL at once
+    const compPromptTexts = (competitors ?? []).map((comp: string) =>
+      `Compare ${brand_name} with ${comp} in the ${category} market. How do they differ in brand perception, market position, pricing, target audience, and reputation?`
+    )
 
+    const [brandResults, ...compRawResults] = await Promise.all([
+      Promise.all(
+        promptEntries.map(async ({ category, prompt }) => ({
+          category,
+          prompt,
+          response: await queryPerplexity(prompt),
+        }))
+      ),
+      ...compPromptTexts.map(async (prompt: string, i: number) => ({
+        name: competitors[i],
+        response: await queryPerplexity(prompt),
+      })),
+    ])
+
+    const allResults = brandResults as { category: string; prompt: string; response: string }[]
     const fullResearchText = allResults
       .map(r => `[${r.category.toUpperCase()}]\nQ: ${r.prompt}\nA: ${r.response}`)
       .join('\n\n---\n\n')
 
+    const compResults = (compRawResults as { name: string; response: string }[])
+      .map(c => `${c.name}:\n${c.response}`)
+
     // ========================================
-    // STAP 2: Diepgaande visibility analyse via Claude Sonnet
+    // STAP 2: Visibility + Competitor Claude analyses IN PARALLEL
     // ========================================
     const visibilityPrompt = isEn
       ? `You are a senior brand perception analyst. You have received 15 AI responses about the brand "${brand_name}" in the ${category} market, organized across 5 categories: awareness, consideration, decision, sentiment, and cultural positioning.
@@ -186,142 +206,8 @@ Analyseer alles grondig. Geef je analyse als JSON:
 
 Geef ALLEEN de JSON terug.`
 
-    const visRaw = await askClaude(visibilityPrompt, 2500)
-    const visData = parseJSON(visRaw) as {
-      visibility_score: number
-      visibility_summary: string
-      key_findings: string[]
-      ai_quotes: { quote: string; context: string }[]
-      category_scores: Record<string, number>
-    } | null
-
-    const visibility = visData ?? {
-      visibility_score: 50,
-      visibility_summary: 'Analyse kon niet worden verwerkt.',
-      key_findings: ['Geen findings beschikbaar'],
-      ai_quotes: [],
-      category_scores: { awareness: 50, consideration: 50, decision: 50, sentiment: 50, cultural: 50 },
-    }
-
-    // ========================================
-    // STAP 3: Identity gap + cultural signals via Claude Sonnet
-    // ========================================
-    const gapPrompt = isEn
-      ? `You are a senior brand strategist. Compare how AI perceives the brand "${brand_name}" with its intended identity.
-
-AI PERCEPTION:
-${visibility.visibility_summary}
-
-KEY FINDINGS:
-${visibility.key_findings.join('\n')}
-
-FULL AI RESPONSES (first 4000 chars):
-${fullResearchText.slice(0, 4000)}
-
-INTENDED POSITIONING:
-${positioning}
-
-Analyse the gap deeply across 6 dimensions. Also identify cultural signals. Return as JSON:
-{
-  "identity_gaps": [
-    { "dimension": "Tone of Voice", "score": <0-10>, "what_matches": "<what AI gets right>", "what_misses": "<what AI gets wrong or misses>", "recommendation": "<specific action to close this gap>" },
-    { "dimension": "Core Values", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
-    { "dimension": "Audience Recognition", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
-    { "dimension": "Market Position", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
-    { "dimension": "Brand Promise", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
-    { "dimension": "Emotional Association", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" }
-  ],
-  "cultural_signals": {
-    "positive": ["<cultural association that helps the brand>", "<another>"],
-    "negative": ["<cultural association that hurts the brand>", "<another>"],
-    "missing": ["<cultural association the brand wants but AI doesn't see>", "<another>"]
-  },
-  "action_plan": [
-    { "action": "<specific, concrete action>", "priority": "high|medium|low", "impact": "<what this will improve>", "effort": "<what it takes to implement>" },
-    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
-    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
-    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
-    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
-    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
-    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" }
-  ]
-}
-
-Return ONLY the JSON.`
-      : `Je bent een senior brand strategist. Vergelijk hoe AI het merk "${brand_name}" ziet met de beoogde identiteit.
-
-AI-PERCEPTIE:
-${visibility.visibility_summary}
-
-KEY FINDINGS:
-${visibility.key_findings.join('\n')}
-
-VOLLEDIGE AI-ANTWOORDEN (eerste 4000 tekens):
-${fullResearchText.slice(0, 4000)}
-
-BEOOGDE POSITIONERING:
-${positioning}
-
-Analyseer de kloof grondig op 6 dimensies. Identificeer ook culturele signalen. Geef als JSON:
-{
-  "identity_gaps": [
-    { "dimension": "Tone of Voice", "score": <0-10>, "what_matches": "<wat AI goed ziet>", "what_misses": "<wat AI mist of verkeerd ziet>", "recommendation": "<concrete actie om deze kloof te dichten>" },
-    { "dimension": "Kernwaarden", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
-    { "dimension": "Doelgroep herkenning", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
-    { "dimension": "Marktpositie", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
-    { "dimension": "Merkbelofte", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
-    { "dimension": "Emotionele associatie", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" }
-  ],
-  "cultural_signals": {
-    "positive": ["<culturele associatie die het merk helpt>", "<nog een>"],
-    "negative": ["<culturele associatie die het merk schaadt>", "<nog een>"],
-    "missing": ["<culturele associatie die het merk wil maar AI niet ziet>", "<nog een>"]
-  },
-  "action_plan": [
-    { "action": "<specifieke, concrete actie>", "priority": "high|medium|low", "impact": "<wat dit verbetert>", "effort": "<wat ervoor nodig is>" },
-    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
-    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
-    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
-    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
-    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
-    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" }
-  ]
-}
-
-Geef ALLEEN de JSON terug.`
-
-    const gapRaw = await askClaude(gapPrompt, 3500)
-    const gapData = parseJSON(gapRaw) as {
-      identity_gaps: { dimension: string; score: number; what_matches: string; what_misses: string; recommendation: string }[]
-      cultural_signals: { positive: string[]; negative: string[]; missing: string[] }
-      action_plan: { action: string; priority: string; impact: string; effort: string }[]
-    } | null
-
-    const gaps = gapData ?? {
-      identity_gaps: [],
-      cultural_signals: { positive: [], negative: [], missing: [] },
-      action_plan: [],
-    }
-
-    // ========================================
-    // STAP 4: Gestructureerde competitor analyse
-    // ========================================
-    let competitorData: { summary: string; competitors: { name: string; visibility_score: number; strengths: string[]; weaknesses: string[] }[] } = {
-      summary: '',
-      competitors: [],
-    }
-
-    if (competitors && competitors.length > 0) {
-      // Perplexity research per concurrent
-      const compResults: string[] = []
-      for (const comp of competitors) {
-        const r = await queryPerplexity(
-          `Compare ${brand_name} with ${comp} in the ${category} market. How do they differ in brand perception, market position, pricing, target audience, and reputation?`
-        )
-        compResults.push(`${comp}:\n${r}`)
-      }
-
-      const compPrompt = isEn
+    const compClaudePrompt = competitors?.length > 0
+      ? (isEn
         ? `You are a competitive analyst. Based on AI research, compare ${brand_name} with its competitors.
 
 RESEARCH:
@@ -363,44 +249,158 @@ Geef gestructureerde JSON:
   ]
 }
 
-Geef ALLEEN de JSON terug.`
+Geef ALLEEN de JSON terug.`)
+      : null
 
-      const compRaw = await askClaude(compPrompt, 1500)
+    // Run visibility + competitor analysis in parallel (using Haiku for speed)
+    const [visRaw, compRaw] = await Promise.all([
+      askClaude(visibilityPrompt, 2500, true),
+      compClaudePrompt ? askClaude(compClaudePrompt, 1500, true) : Promise.resolve(''),
+    ])
+
+    const visData = parseJSON(visRaw) as {
+      visibility_score: number
+      visibility_summary: string
+      key_findings: string[]
+      ai_quotes: { quote: string; context: string }[]
+      category_scores: Record<string, number>
+    } | null
+
+    const visibility = visData ?? {
+      visibility_score: 50,
+      visibility_summary: 'Analyse kon niet worden verwerkt.',
+      key_findings: ['Geen findings beschikbaar'],
+      ai_quotes: [],
+      category_scores: { awareness: 50, consideration: 50, decision: 50, sentiment: 50, cultural: 50 },
+    }
+
+    let competitorData: { summary: string; competitors: { name: string; visibility_score: number; strengths: string[]; weaknesses: string[] }[] } = {
+      summary: '',
+      competitors: [],
+    }
+    if (compRaw) {
       const parsed = parseJSON(compRaw) as typeof competitorData | null
       if (parsed) competitorData = parsed
     }
 
     // ========================================
-    // STAP 5: Executive summary
+    // STAP 3: Identity gap + cultural signals + executive summary (needs visibility data)
     // ========================================
-    const summaryPrompt = isEn
-      ? `Write a 4-5 sentence executive summary for a brand perception audit of "${brand_name}" (${category}).
+    const gapPrompt = isEn
+      ? `You are a senior brand strategist. Compare how AI perceives the brand "${brand_name}" with its intended identity.
 
-Visibility score: ${visibility.visibility_score}/100
-Key gap: ${gaps.identity_gaps?.[0]?.dimension ?? 'unknown'} (${gaps.identity_gaps?.[0]?.score ?? '?'}/10)
-Top finding: ${visibility.key_findings?.[0] ?? ''}
-Competitive position: ${competitorData.summary || 'No competitor data'}
+AI PERCEPTION:
+${visibility.visibility_summary}
 
-Write a compelling, analytical summary that a CMO would find valuable. Be direct and specific. ${isEn ? 'Write in English.' : ''}
-Return ONLY the summary text, no JSON.`
-      : `Schrijf een executive summary van 4-5 zinnen voor een brand perception audit van "${brand_name}" (${category}).
+KEY FINDINGS:
+${visibility.key_findings.join('\n')}
 
-Visibility score: ${visibility.visibility_score}/100
-Grootste kloof: ${gaps.identity_gaps?.[0]?.dimension ?? 'onbekend'} (${gaps.identity_gaps?.[0]?.score ?? '?'}/10)
-Belangrijkste finding: ${visibility.key_findings?.[0] ?? ''}
-Competitieve positie: ${competitorData.summary || 'Geen competitor data'}
+FULL AI RESPONSES (first 4000 chars):
+${fullResearchText.slice(0, 4000)}
 
-Schrijf een overtuigende, analytische samenvatting die een CMO waardevol zou vinden. Wees direct en specifiek. Schrijf in het Nederlands.
-Geef ALLEEN de samenvatting, geen JSON.`
+INTENDED POSITIONING:
+${positioning}
 
-    const executiveSummary = await askClaude(summaryPrompt, 500)
+COMPETITIVE CONTEXT:
+${competitorData.summary || 'No competitor data available'}
+
+Analyse the gap deeply across 6 dimensions. Also identify cultural signals and write an executive summary. Return as JSON:
+{
+  "executive_summary": "<4-5 sentence compelling executive summary for a CMO. Include the visibility score of ${visibility.visibility_score}/100. Be direct, specific, and analytical.>",
+  "identity_gaps": [
+    { "dimension": "Tone of Voice", "score": <0-10>, "what_matches": "<what AI gets right>", "what_misses": "<what AI gets wrong or misses>", "recommendation": "<specific action to close this gap>" },
+    { "dimension": "Core Values", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
+    { "dimension": "Audience Recognition", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
+    { "dimension": "Market Position", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
+    { "dimension": "Brand Promise", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
+    { "dimension": "Emotional Association", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" }
+  ],
+  "cultural_signals": {
+    "positive": ["<cultural association that helps the brand>", "<another>"],
+    "negative": ["<cultural association that hurts the brand>", "<another>"],
+    "missing": ["<cultural association the brand wants but AI doesn't see>", "<another>"]
+  },
+  "action_plan": [
+    { "action": "<specific, concrete action>", "priority": "high|medium|low", "impact": "<what this will improve>", "effort": "<what it takes to implement>" },
+    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
+    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
+    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
+    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
+    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
+    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" }
+  ]
+}
+
+Return ONLY the JSON.`
+      : `Je bent een senior brand strategist. Vergelijk hoe AI het merk "${brand_name}" ziet met de beoogde identiteit.
+
+AI-PERCEPTIE:
+${visibility.visibility_summary}
+
+KEY FINDINGS:
+${visibility.key_findings.join('\n')}
+
+VOLLEDIGE AI-ANTWOORDEN (eerste 4000 tekens):
+${fullResearchText.slice(0, 4000)}
+
+BEOOGDE POSITIONERING:
+${positioning}
+
+COMPETITIEVE CONTEXT:
+${competitorData.summary || 'Geen competitor data beschikbaar'}
+
+Analyseer de kloof grondig op 6 dimensies. Identificeer ook culturele signalen en schrijf een executive summary. Geef als JSON:
+{
+  "executive_summary": "<4-5 zinnen overtuigende executive summary voor een CMO. Vermeld de visibility score van ${visibility.visibility_score}/100. Wees direct, specifiek en analytisch. Schrijf in het Nederlands.>",
+  "identity_gaps": [
+    { "dimension": "Tone of Voice", "score": <0-10>, "what_matches": "<wat AI goed ziet>", "what_misses": "<wat AI mist of verkeerd ziet>", "recommendation": "<concrete actie om deze kloof te dichten>" },
+    { "dimension": "Kernwaarden", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
+    { "dimension": "Doelgroep herkenning", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
+    { "dimension": "Marktpositie", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
+    { "dimension": "Merkbelofte", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" },
+    { "dimension": "Emotionele associatie", "score": <0-10>, "what_matches": "<>", "what_misses": "<>", "recommendation": "<>" }
+  ],
+  "cultural_signals": {
+    "positive": ["<culturele associatie die het merk helpt>", "<nog een>"],
+    "negative": ["<culturele associatie die het merk schaadt>", "<nog een>"],
+    "missing": ["<culturele associatie die het merk wil maar AI niet ziet>", "<nog een>"]
+  },
+  "action_plan": [
+    { "action": "<specifieke, concrete actie>", "priority": "high|medium|low", "impact": "<wat dit verbetert>", "effort": "<wat ervoor nodig is>" },
+    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
+    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
+    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
+    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
+    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" },
+    { "action": "<>", "priority": "<>", "impact": "<>", "effort": "<>" }
+  ]
+}
+
+Geef ALLEEN de JSON terug.`
+
+    const gapRaw = await askClaude(gapPrompt, 4000)
+    const gapData = parseJSON(gapRaw) as {
+      executive_summary: string
+      identity_gaps: { dimension: string; score: number; what_matches: string; what_misses: string; recommendation: string }[]
+      cultural_signals: { positive: string[]; negative: string[]; missing: string[] }
+      action_plan: { action: string; priority: string; impact: string; effort: string }[]
+    } | null
+
+    const gaps = gapData ?? {
+      executive_summary: '',
+      identity_gaps: [],
+      cultural_signals: { positive: [], negative: [], missing: [] },
+      action_plan: [],
+    }
+
+    const executiveSummary = (gaps.executive_summary || `${brand_name} behaalt een visibility score van ${visibility.visibility_score}/100. ${visibility.visibility_summary}`).replace(/^["']|["']$/g, '').trim()
 
     // ========================================
     // Rapport samenstellen
     // ========================================
     const report = {
       version: 2,
-      executive_summary: executiveSummary.replace(/^["']|["']$/g, '').trim(),
+      executive_summary: executiveSummary,
       visibility_score: visibility.visibility_score,
       visibility_summary: visibility.visibility_summary,
       category_scores: visibility.category_scores,
