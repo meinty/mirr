@@ -6,42 +6,45 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
-  const { brandName, language = 'nl' } = await req.json()
+  const { brandName, websiteUrl, language = 'nl' } = await req.json()
   if (!brandName) return NextResponse.json({ error: 'No brand name' }, { status: 400 })
 
   const isEn = language === 'en'
+  const urlContext = websiteUrl ? (isEn ? `\nTheir website is: ${websiteUrl}` : `\nHun website is: ${websiteUrl}`) : ''
 
   const prompt = isEn
-    ? `You are a brand analyst. Given only a brand name, research what you know and return structured brand information.
+    ? `You are a brand analyst. Given a brand name, return structured brand information.
 
-Brand name: "${brandName}"
+Brand name: "${brandName}"${urlContext}
 
-Return a JSON object with these fields:
+Return a JSON object:
 {
-  "category": "<the market/industry category this brand operates in, e.g. 'plant-based dairy', 'discount retail', 'sportswear'>",
-  "positioning_what": "<what the brand does, in one sentence>",
-  "positioning_who": "<target audience, in one sentence>",
+  "website_url": "<the brand's main website URL, e.g. https://www.action.com>",
+  "category": "<market/industry category, e.g. 'discount retail', 'plant-based dairy'>",
+  "region": "<primary market/region, e.g. 'Europe', 'Netherlands', 'United States'>",
+  "positioning_what": "<what the brand does, one sentence>",
+  "positioning_who": "<target audience, one sentence>",
   "positioning_how": "<brand tone and character, 3-5 adjectives>",
-  "competitor_1": "<main competitor brand name>",
-  "competitor_2": "<second competitor brand name>"
+  "competitors": ["<competitor 1>", "<competitor 2>", "<competitor 3>"]
 }
 
-Be specific and concise. If you're unsure about the brand, make your best guess based on the name. Return ONLY the JSON.`
-    : `Je bent een merkanalist. Geef op basis van alleen een merknaam gestructureerde merkinformatie terug.
+Return 3 competitors that directly compete in the same category and market. Be specific and concise. Return ONLY the JSON.`
+    : `Je bent een merkanalist. Geef op basis van een merknaam gestructureerde merkinformatie terug.
 
-Merknaam: "${brandName}"
+Merknaam: "${brandName}"${urlContext}
 
-Geef een JSON-object met deze velden:
+Geef een JSON-object:
 {
-  "category": "<de markt/sector waarin dit merk opereert, bijv. 'plant-based zuivel', 'discount retail', 'sportkleding'>",
-  "positioning_what": "<wat het merk doet, in één zin>",
-  "positioning_who": "<doelgroep, in één zin>",
+  "website_url": "<de hoofdwebsite van het merk, bijv. https://www.action.com>",
+  "category": "<markt/sector, bijv. 'discount retail', 'plant-based zuivel'>",
+  "region": "<primaire markt/regio, bijv. 'Europa', 'Nederland', 'Wereldwijd'>",
+  "positioning_what": "<wat het merk doet, in een zin>",
+  "positioning_who": "<doelgroep, in een zin>",
   "positioning_how": "<toon en karakter van het merk, 3-5 bijvoeglijke naamwoorden>",
-  "competitor_1": "<belangrijkste concurrent>",
-  "competitor_2": "<tweede concurrent>"
+  "competitors": ["<concurrent 1>", "<concurrent 2>", "<concurrent 3>"]
 }
 
-Wees specifiek en beknopt. Als je niet zeker bent over het merk, doe je beste inschatting op basis van de naam. Geef ALLEEN de JSON terug.`
+Geef 3 concurrenten die direct concurreren in dezelfde categorie en markt. Wees specifiek en beknopt. Geef ALLEEN de JSON terug.`
 
   try {
     const msg = await anthropic.messages.create({

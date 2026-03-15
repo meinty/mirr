@@ -8,6 +8,8 @@ import { translations } from '@/lib/translations'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import type { Locale } from '@/lib/translations'
 
+const MAX_COMPETITORS = 5
+
 export default function NewAuditPage() {
   const router = useRouter()
   const supabase = createClient()
@@ -18,22 +20,46 @@ export default function NewAuditPage() {
 
   const [form, setForm] = useState({
     brand_name: '',
+    website_url: '',
     category: '',
+    region: '',
     positioning_what: '',
     positioning_who: '',
     positioning_how: '',
-    competitor_1: '',
-    competitor_2: '',
   })
 
+  const [competitors, setCompetitors] = useState(['', ''])
+
   useEffect(() => {
-    setLocale(getClientLocale())
+    const loc = getClientLocale()
+    setLocale(loc)
+    setForm(prev => ({ ...prev, region: loc === 'en' ? 'Global' : 'Nederland' }))
   }, [])
 
   const t = translations[locale]
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
+  }
+
+  function handleCompetitorChange(index: number, value: string) {
+    setCompetitors(prev => {
+      const next = [...prev]
+      next[index] = value
+      return next
+    })
+  }
+
+  function addCompetitor() {
+    if (competitors.length < MAX_COMPETITORS) {
+      setCompetitors(prev => [...prev, ''])
+    }
+  }
+
+  function removeCompetitor(index: number) {
+    if (competitors.length > 1) {
+      setCompetitors(prev => prev.filter((_, i) => i !== index))
+    }
   }
 
   async function handlePrefill() {
@@ -43,19 +69,26 @@ export default function NewAuditPage() {
       const res = await fetch('/api/prefill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandName: form.brand_name, language: locale }),
+        body: JSON.stringify({
+          brandName: form.brand_name,
+          websiteUrl: form.website_url,
+          language: locale,
+        }),
       })
       if (!res.ok) throw new Error()
       const data = await res.json()
       setForm(prev => ({
         ...prev,
+        website_url: data.website_url || prev.website_url,
         category: data.category || prev.category,
+        region: data.region || prev.region,
         positioning_what: data.positioning_what || prev.positioning_what,
         positioning_who: data.positioning_who || prev.positioning_who,
         positioning_how: data.positioning_how || prev.positioning_how,
-        competitor_1: data.competitor_1 || prev.competitor_1,
-        competitor_2: data.competitor_2 || prev.competitor_2,
       }))
+      if (data.competitors && data.competitors.length > 0) {
+        setCompetitors(data.competitors.slice(0, MAX_COMPETITORS))
+      }
     } catch {
       setError(t.errorGeneric)
     } finally {
@@ -87,14 +120,18 @@ export default function NewAuditPage() {
       ? `What: ${form.positioning_what}\nFor whom: ${form.positioning_who}\nCharacter: ${form.positioning_how}`
       : `Wat: ${form.positioning_what}\nVoor wie: ${form.positioning_who}\nKarakter: ${form.positioning_how}`
 
+    const filteredCompetitors = competitors.filter(c => c.trim())
+
     const { data: audit, error: auditError } = await supabase
       .from('audits')
       .insert({
         user_id: user.id,
         brand_name: form.brand_name,
+        website_url: form.website_url || null,
         category: form.category,
+        region: form.region || null,
         positioning: positioningLabel,
-        competitors: [form.competitor_1, form.competitor_2].filter(Boolean),
+        competitors: filteredCompetitors,
         status: 'queued',
       })
       .select()
@@ -155,15 +192,40 @@ export default function NewAuditPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1.5">{t.categoryLabel}</label>
+            <label className="block text-sm font-medium mb-1.5">
+              {t.websiteLabel} <span className="text-gray-400 font-normal">{t.websiteHint}</span>
+            </label>
             <input
-              name="category"
-              value={form.category}
+              name="website_url"
+              value={form.website_url}
               onChange={handleChange}
               className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-              placeholder={t.categoryPlaceholder}
-              required
+              placeholder={t.websitePlaceholder}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1.5">{t.categoryLabel}</label>
+              <input
+                name="category"
+                value={form.category}
+                onChange={handleChange}
+                className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                placeholder={t.categoryPlaceholder}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1.5">{t.regionLabel}</label>
+              <input
+                name="region"
+                value={form.region}
+                onChange={handleChange}
+                className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                placeholder={t.regionPlaceholder}
+              />
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -208,26 +270,37 @@ export default function NewAuditPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1.5">{t.competitor1Label}</label>
-              <input
-                name="competitor_1"
-                value={form.competitor_1}
-                onChange={handleChange}
-                className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-                placeholder={t.competitor1Placeholder}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1.5">{t.competitor2Label}</label>
-              <input
-                name="competitor_2"
-                value={form.competitor_2}
-                onChange={handleChange}
-                className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-                placeholder={t.competitor2Placeholder}
-              />
+          <div>
+            <label className="block text-sm font-medium mb-1.5">{t.competitorsLabel}</label>
+            <div className="space-y-2">
+              {competitors.map((comp, i) => (
+                <div key={i} className="flex gap-2">
+                  <input
+                    value={comp}
+                    onChange={e => handleCompetitorChange(i, e.target.value)}
+                    className="flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                    placeholder={`${t.competitorPlaceholder} ${i + 1}`}
+                  />
+                  {competitors.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeCompetitor(i)}
+                      className="px-3 py-2.5 text-gray-400 hover:text-gray-600 text-sm"
+                    >
+                      &times;
+                    </button>
+                  )}
+                </div>
+              ))}
+              {competitors.length < MAX_COMPETITORS && (
+                <button
+                  type="button"
+                  onClick={addCompetitor}
+                  className="text-sm text-gray-500 hover:text-gray-700 py-1"
+                >
+                  + {t.addCompetitor}
+                </button>
+              )}
             </div>
           </div>
 
