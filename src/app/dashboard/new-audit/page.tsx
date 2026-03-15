@@ -12,6 +12,7 @@ export default function NewAuditPage() {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
+  const [prefilling, setPrefilling] = useState(false)
   const [error, setError] = useState('')
   const [locale, setLocale] = useState<Locale>('nl')
 
@@ -33,6 +34,33 @@ export default function NewAuditPage() {
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
+  }
+
+  async function handlePrefill() {
+    if (!form.brand_name.trim()) return
+    setPrefilling(true)
+    try {
+      const res = await fetch('/api/prefill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandName: form.brand_name, language: locale }),
+      })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setForm(prev => ({
+        ...prev,
+        category: data.category || prev.category,
+        positioning_what: data.positioning_what || prev.positioning_what,
+        positioning_who: data.positioning_who || prev.positioning_who,
+        positioning_how: data.positioning_how || prev.positioning_how,
+        competitor_1: data.competitor_1 || prev.competitor_1,
+        competitor_2: data.competitor_2 || prev.competitor_2,
+      }))
+    } catch {
+      setError(t.errorGeneric)
+    } finally {
+      setPrefilling(false)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -106,14 +134,24 @@ export default function NewAuditPage() {
         <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-8 space-y-6">
           <div>
             <label className="block text-sm font-medium mb-1.5">{t.brandNameLabel}</label>
-            <input
-              name="brand_name"
-              value={form.brand_name}
-              onChange={handleChange}
-              className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-              placeholder={t.brandNamePlaceholder}
-              required
-            />
+            <div className="flex gap-2">
+              <input
+                name="brand_name"
+                value={form.brand_name}
+                onChange={handleChange}
+                className="flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                placeholder={t.brandNamePlaceholder}
+                required
+              />
+              <button
+                type="button"
+                onClick={handlePrefill}
+                disabled={prefilling || !form.brand_name.trim()}
+                className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+              >
+                {prefilling ? t.prefillLoading : t.prefillButton}
+              </button>
+            </div>
           </div>
 
           <div>
